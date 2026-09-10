@@ -8,7 +8,7 @@ internal struct CursorModifier: ViewModifier {
     let cursor: NSCursor
 
     func body(content: Content) -> some View {
-        content.overlay(CursorView(cursor: cursor))
+        content.overlay(CursorView(cursor: cursor).allowsHitTesting(false))
     }
 }
 

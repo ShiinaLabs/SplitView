@@ -92,7 +92,7 @@ Use `SplitFraction.constrained` in `setConstrainedFraction` and `fraction(for:in
 
 - [ ] **Step 6: Add direction-aware transitions to the conditional panes.**
 
-Apply `.transition(.move(edge: SplitTransition.edge(for: .primary, layout: layout.value)))` to the primary view and the corresponding secondary edge to the secondary view. Keep the splitter's insertion/removal tied to its existing `isDraggable()` condition and use the secondary edge for its transition so the existing hide-secondary path remains visually stable.
+Apply `.transition(.move(edge: SplitTransition.edge(for: .primary, layout: layout.value)))` to the primary view and the corresponding secondary edge to the secondary view. Keep the splitter's insertion/removal tied to its existing `isDraggable()` condition and choose its edge from `hide.side ?? hide.oldSide ?? .secondary`, so both hiding and showing a primary or secondary side use the correct direction.
 
 - [ ] **Step 7: Run the full unit test suite.**
 
@@ -168,7 +168,7 @@ Use `onReceive(fraction.$value)` in `Split` and `onReceive(styling.$previewHide)
 
 - [ ] **Step 4: Implement the macOS cursor modifier with update-safe cursor rects.**
 
-Guard the file with `#if os(macOS)`, use `NSViewRepresentable`, initialize the cursor view with a non-optional cursor, update the cursor in `updateNSView`, and call `resetCursorRects` when the cursor changes. In `Splitter`, use `NSCursor.columnResize`/`rowResize` through the modifier on macOS; retain the current `NSCursor.push/pop` hover fallback only for Mac Catalyst.
+Guard the file with `#if os(macOS)`, use `NSViewRepresentable`, initialize the cursor view with a non-optional cursor, update the cursor in `updateNSView`, and call `resetCursorRects` when the cursor changes. In `Splitter`, use the cursor-rect modifier with the deployment-safe `NSCursor.resizeLeftRight`/`resizeUpDown` cursors on macOS 12 and later; retain the current `NSCursor.push/pop` hover fallback only for Mac Catalyst. Mark the representable overlay as non-hit-testing so it cannot intercept the splitter drag gesture.
 
 - [ ] **Step 5: Run focused tests and platform builds.**
 

@@ -72,6 +72,7 @@ public struct Split<P: View, D: SplitDivider, S: View>: View {
             let sHeight = horizontal ? breadth : max(minSLength, min(height - pLength, sLength - spacing / 2))
             let sOffset = horizontal ? CGSize(width: pWidth + spacing, height: 0) : CGSize(width: 0, height: pHeight + spacing)
             let dCenter = horizontal ? CGPoint(x: pWidth + spacing / 2, y: height / 2) : CGPoint(x: width / 2, y: pHeight + spacing / 2)
+            let splitterSide = SplitTransition.splitterSide(current: hide.side, previous: hide.oldSide)
             ZStack(alignment: .topLeading) {
                 if !hidePrimary {
                     primary
@@ -89,7 +90,7 @@ public struct Split<P: View, D: SplitDivider, S: View>: View {
                     splitter
                         .position(dCenter)
                         .simultaneousGesture(drag(in: size))
-                        .transition(.move(edge: SplitTransition.edge(for: .secondary, layout: layout.value)))
+                        .transition(.move(edge: SplitTransition.edge(for: splitterSide, layout: layout.value)))
                 }
             }
             .animation(.default, value: hide.side?.rawValue)
@@ -104,10 +105,10 @@ public struct Split<P: View, D: SplitDivider, S: View>: View {
             .clipped()  // Can cause problems in some List styles if not clipped
             .environmentObject(layout)
             .onReceive(fraction.$value) { new in
-                let newFraction = SplitFraction.constrained(new, minPrimary: minPFraction, minSecondary: minSFraction)
-                guard newFraction != constrainedFraction else { return }
-                withAnimation {
-                    constrainedFraction = newFraction
+                if let newFraction = SplitFraction.externallyUpdated(new, current: constrainedFraction, minPrimary: minPFraction, minSecondary: minSFraction) {
+                    withAnimation {
+                        constrainedFraction = newFraction
+                    }
                 }
             }
         }

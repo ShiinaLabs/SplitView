@@ -7,20 +7,35 @@ final class ObservationTests: XCTestCase {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .deletingLastPathComponent()
-        let paths = [
-            "Sources/SplitView/Split.swift",
-            "Sources/SplitView/Splitter.swift",
-            "Demo/SplitDemo/DemoSplitter.swift",
-            "README.md"
+        let sourceDirectories = [
+            packageRoot.appendingPathComponent("Sources/SplitView"),
+            packageRoot.appendingPathComponent("Demo/SplitDemo")
         ]
 
-        for relativePath in paths {
-            let fileURL = packageRoot.appendingPathComponent(relativePath)
-            let source = try String(contentsOf: fileURL, encoding: .utf8)
-            XCTAssertFalse(
-                source.contains(".onChange(of:"),
-                "Deprecated onChange overload remains in \(relativePath)"
-            )
+        for directoryURL in sourceDirectories {
+            guard let enumerator = FileManager.default.enumerator(
+                at: directoryURL,
+                includingPropertiesForKeys: [.isRegularFileKey],
+                options: [.skipsHiddenFiles]
+            ) else {
+                XCTFail("Could not enumerate source directory \(directoryURL.path)")
+                continue
+            }
+            for case let fileURL as URL in enumerator {
+                guard fileURL.pathExtension == "swift" else { continue }
+                let source = try String(contentsOf: fileURL, encoding: .utf8)
+                XCTAssertFalse(
+                    source.contains(".onChange(of:"),
+                    "Deprecated onChange overload remains in \(fileURL.path)"
+                )
+            }
         }
+
+        let readmeURL = packageRoot.appendingPathComponent("README.md")
+        let readme = try String(contentsOf: readmeURL, encoding: .utf8)
+        XCTAssertFalse(
+            readme.contains(".onChange(of:"),
+            "Deprecated onChange overload remains in \(readmeURL.path)"
+        )
     }
 }
