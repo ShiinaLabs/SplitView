@@ -10,7 +10,7 @@
 
 **Spec:** Fork issues [#1](https://github.com/ShiinaLabs/SplitView/issues/1), [#2](https://github.com/ShiinaLabs/SplitView/issues/2), [#3](https://github.com/ShiinaLabs/SplitView/issues/3), and [#4](https://github.com/ShiinaLabs/SplitView/issues/4), each of which links to its upstream Issue or PR source.
 
-**Status:** Implemented in `codex/fix-upstream-issues`; final verification and fork PR publication remain.
+**Status:** Implemented and verified in `codex/fix-upstream-issues`; fork PR [#5](https://github.com/ShiinaLabs/SplitView/pull/5) is open for review and remains unmerged.
 
 ## Global Constraints
 
