@@ -357,7 +357,7 @@ struct CustomSplitter: SplitDivider {
                 }
             }
             .contentShape(Rectangle())
-            .onChange(of: styling.previewHide) { hide in
+            .onReceive(styling.$previewHide) { hide in
                 hideButton = styling.hideSplitter
             }
         } else {
@@ -376,7 +376,7 @@ struct CustomSplitter: SplitDivider {
                 }
             }
             .contentShape(Rectangle())
-            .onChange(of: styling.previewHide) { hide in
+            .onReceive(styling.$previewHide) { hide in
                 hideButton = styling.hideSplitter
             }
         }
@@ -659,4 +659,3 @@ Eliminates the use of the clear background and SizePreferenceKeys. (My suspicion
 ### Version 0.1
 
 Originally posted in [response](https://stackoverflow.com/a/68926261) to https://stackoverflow.com/q/67403140. This version used HSplitView and VSplitView as a means to create the SplitView. It also used SizePreferenceKeys from a GeometryReader on a clear background to set the size. In nested SplitViews, I found this was causing "Bound preference ... tried to update multiple times per frame" to happen intermittently depending on the view arrangement.
-

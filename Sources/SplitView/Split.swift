@@ -76,19 +76,23 @@ public struct Split<P: View, D: SplitDivider, S: View>: View {
                 if !hidePrimary {
                     primary
                         .frame(width: pWidth, height: pHeight)
+                        .transition(.move(edge: SplitTransition.edge(for: .primary, layout: layout.value)))
                 }
                 if !hideSecondary {
                     secondary
                         .frame(width: sWidth, height: sHeight)
                         .offset(sOffset)
+                        .transition(.move(edge: SplitTransition.edge(for: .secondary, layout: layout.value)))
                 }
                 // Only show the splitter if it is draggable. See isDraggable comments.
                 if isDraggable() {
                     splitter
                         .position(dCenter)
                         .simultaneousGesture(drag(in: size))
+                        .transition(.move(edge: SplitTransition.edge(for: .secondary, layout: layout.value)))
                 }
             }
+            .animation(.default, value: hide.side?.rawValue)
             // Our size changes when the window size changes or the containing window's size changes.
             // Note our size doesn't change when dragging the splitter, but when we have nested split
             // views, dragging our splitter can cause the size of another split view to change.
@@ -99,7 +103,13 @@ public struct Split<P: View, D: SplitDivider, S: View>: View {
             }
             .clipped()  // Can cause problems in some List styles if not clipped
             .environmentObject(layout)
-            .onChange(of: fraction.value) { new in constrainedFraction = new }
+            .onReceive(fraction.$value) { new in
+                let newFraction = SplitFraction.constrained(new, minPrimary: minPFraction, minSecondary: minSFraction)
+                guard newFraction != constrainedFraction else { return }
+                withAnimation {
+                    constrainedFraction = newFraction
+                }
+            }
         }
     }
 
@@ -168,7 +178,7 @@ public struct Split<P: View, D: SplitDivider, S: View>: View {
         let newPLength = side.isPrimary ? oldPLength : oldPLength + delta
         let newFraction = newPLength / newLength
         // Always keep the constrainedFraction within bounds of minimums if specified
-        constrainedFraction = min(1 - (minSFraction ?? 0), max((minPFraction ?? 0), newFraction))
+        constrainedFraction = SplitFraction.constrained(newFraction, minPrimary: minPFraction, minSecondary: minSFraction)
         fraction.value = constrainedFraction
     }
     
@@ -247,7 +257,7 @@ public struct Split<P: View, D: SplitDivider, S: View>: View {
         let delta = previousPosition == nil ? gestureTranslation : gestureLocation - previousPosition!  // Amount moved since last change
         let constrainedLocation = max(0, min(length, splitterLocation + delta))                         // New location kept in proper bounds
         let fullFraction = constrainedLocation / length                                                 // Fraction of full size without regard to constraints
-        let constrainedFraction = min(1 - (minSFraction ?? 0), max((minPFraction ?? 0), fullFraction))  // Fraction of full size kept within constraints
+        let constrainedFraction = SplitFraction.constrained(fullFraction, minPrimary: minPFraction, minSecondary: minSFraction)  // Fraction of full size kept within constraints
         return (constrained: constrainedFraction, full: fullFraction)
     }
     
