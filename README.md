@@ -585,11 +585,10 @@ log message when dragging the Splitter to cause a view size to go to zero on
 Mac Catalyst only. The message shows up in the Xcode console as `[API] cannot 
 add handler to 3 from 3 - dropping`. This message is not present as of MacOS 14.0 Sonoma.
 
-2. The Splitter's `onHover` entry action used to display the resizing cursors on Mac Catalyst 
-and MacOS may occasionally not be triggered when using nested split views. I think this happens 
-seldom enough to not be a problem. When it occurs, the cursor doesn't change to 
-`resizeLeftRight` or `resizeUpDown` when hovering over a splitter, but the splitter will 
-still be draggable.
+2. On Mac Catalyst, the Splitter's `onHover` entry action used to display the resizing cursor
+may occasionally not be triggered when using nested split views. When that occurs, the cursor
+doesn't change to `resizeLeftRight` or `resizeUpDown`, but the splitter remains draggable. On
+macOS, the default Splitter uses AppKit cursor rects instead of the hover stack.
 
 ## Possible Enhancements
 

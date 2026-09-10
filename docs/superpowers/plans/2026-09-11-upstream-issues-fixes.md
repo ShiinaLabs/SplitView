@@ -10,6 +10,8 @@
 
 **Spec:** Fork issues [#1](https://github.com/ShiinaLabs/SplitView/issues/1), [#2](https://github.com/ShiinaLabs/SplitView/issues/2), [#3](https://github.com/ShiinaLabs/SplitView/issues/3), and [#4](https://github.com/ShiinaLabs/SplitView/issues/4), each of which links to its upstream Issue or PR source.
 
+**Status:** Implemented in `codex/fix-upstream-issues`; final verification and fork PR publication remain.
+
 ## Global Constraints
 
 - Preserve `.macOS(.v12)`, `.iOS(.v15)`, and `.macCatalyst(.v15)` support.
