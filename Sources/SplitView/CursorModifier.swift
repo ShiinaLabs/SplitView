@@ -48,6 +48,28 @@ private final class CursorNSView: NSView {
     }
 }
 
+/// Returns the native divider cursor on macOS 15 and later, with a deployment-safe
+/// fallback for macOS 12 through 14. The selector lookup keeps this source buildable
+/// with SDKs that predate the modern cursor declarations.
+internal enum SplitterCursor {
+    static var modernCursorAPIAvailable: Bool {
+        guard #available(macOS 15.0, *) else { return false }
+        let cursorClass = NSCursor.self as AnyObject
+        return cursorClass.responds(to: NSSelectorFromString("columnResizeCursor"))
+            && cursorClass.responds(to: NSSelectorFromString("rowResizeCursor"))
+    }
+
+    static func cursor(horizontal: Bool) -> NSCursor {
+        let fallback = horizontal ? NSCursor.resizeLeftRight : NSCursor.resizeUpDown
+        guard modernCursorAPIAvailable else { return fallback }
+
+        let selectorName = horizontal ? "columnResizeCursor" : "rowResizeCursor"
+        let selector = NSSelectorFromString(selectorName)
+        let cursorClass = NSCursor.self as AnyObject
+        return cursorClass.perform(selector)?.takeUnretainedValue() as? NSCursor ?? fallback
+    }
+}
+
 extension View {
     internal func cursor(_ cursor: NSCursor) -> some View {
         modifier(CursorModifier(cursor: cursor))

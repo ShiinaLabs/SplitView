@@ -1,8 +1,19 @@
 import XCTest
 import SwiftUI
 @testable import SplitView
+#if os(macOS)
+import AppKit
+#endif
 
 final class SplitViewUtilitiesTests: XCTestCase {
+    func testActiveHolderPreservesStateOwnedAndCallerOwnedIdentity() {
+        let stateOwned = FractionHolder(0.25)
+        let callerOwned = FractionHolder(0.75)
+
+        XCTAssertTrue(SplitFraction.activeHolder(stateOwned: stateOwned, explicit: nil) === stateOwned)
+        XCTAssertTrue(SplitFraction.activeHolder(stateOwned: stateOwned, explicit: callerOwned) === callerOwned)
+    }
+
     func testConstrainedClampsToPrimaryMinimum() {
         XCTAssertEqual(
             SplitFraction.constrained(0.1, minPrimary: 0.2, minSecondary: 0.3),
@@ -42,4 +53,15 @@ final class SplitViewUtilitiesTests: XCTestCase {
         XCTAssertEqual(SplitTransition.splitterSide(current: nil, previous: .primary), .primary)
         XCTAssertEqual(SplitTransition.splitterSide(current: nil, previous: nil), .secondary)
     }
+
+    #if os(macOS)
+    func testSplitterCursorUsesModernAPIWhenAvailableAndHasFallbacks() {
+        XCTAssertNotNil(SplitterCursor.cursor(horizontal: true))
+        XCTAssertNotNil(SplitterCursor.cursor(horizontal: false))
+
+        if #available(macOS 15.0, *) {
+            XCTAssertTrue(SplitterCursor.modernCursorAPIAvailable)
+        }
+    }
+    #endif
 }

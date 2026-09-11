@@ -4,13 +4,13 @@
 
 **Goal:** Improve the fork using the four actionable upstream issue groups already tracked in `ShiinaLabs/SplitView` issues #1–#4, while preserving the package's macOS 12, iOS 15, and Mac Catalyst 15 deployment floors.
 
-**Architecture:** Keep the public Split/HSplit/VSplit APIs unchanged. Extract the orientation-dependent transition edge and fraction clamping decisions into small internal helpers so they can be tested without a UI harness; make default fraction holders stable across SwiftUI view reconstruction; replace deprecated `onChange` overloads with publisher-backed observation; and isolate the AppKit cursor implementation behind a macOS-only file while retaining the existing Catalyst fallback.
+**Architecture:** Keep the public Split/HSplit/VSplit APIs unchanged. Extract the orientation-dependent transition edge and fraction clamping decisions into small internal helpers so they can be tested without a UI harness; make default fraction holders stable across SwiftUI view reconstruction while keeping explicitly supplied holders caller-owned; replace deprecated `onChange` overloads with publisher-backed observation; and isolate the AppKit cursor implementation behind a macOS-only file while retaining the existing Catalyst fallback.
 
 **Tech Stack:** Swift 5.8, SwiftUI, XCTest, AppKit only under `#if os(macOS)`, Swift Package Manager, Xcode demo targets.
 
 **Spec:** Fork issues [#1](https://github.com/ShiinaLabs/SplitView/issues/1), [#2](https://github.com/ShiinaLabs/SplitView/issues/2), [#3](https://github.com/ShiinaLabs/SplitView/issues/3), and [#4](https://github.com/ShiinaLabs/SplitView/issues/4), each of which links to its upstream Issue or PR source.
 
-**Status:** Implemented and verified in `codex/fix-upstream-issues`; fork PR [#5](https://github.com/ShiinaLabs/SplitView/pull/5) is open for review and remains unmerged.
+**Status:** Implemented and verified in `codex/fix-upstream-issues`; the follow-up review fixes are included in the open, unmerged fork PR [#5](https://github.com/ShiinaLabs/SplitView/pull/5).
 
 ## Global Constraints
 
@@ -127,7 +127,7 @@ Use the existing package and demo build targets as the regression harness: the H
 
 - [ ] **Step 2: Change only default holder storage to `@StateObject` and initialize it from the existing private initializer values.**
 
-Use `_fraction = StateObject(wrappedValue: fraction)` in the private initializers and retain the existing modifier data flow. Do not alter public method signatures or replace caller-owned holders.
+Use `_fraction = StateObject(wrappedValue: fraction)` in the private initializers for `Split`, `HSplit`, and `VSplit`. Keep an `explicitFraction` reference separate: default holders are state-owned, while `.fraction(FractionHolder)` continues to observe and update the caller-owned holder. Do not alter public method signatures.
 
 - [ ] **Step 3: Run focused and full tests.**
 
@@ -170,7 +170,7 @@ Use `onReceive(fraction.$value)` in `Split` and `onReceive(styling.$previewHide)
 
 - [ ] **Step 4: Implement the macOS cursor modifier with update-safe cursor rects.**
 
-Guard the file with `#if os(macOS)`, use `NSViewRepresentable`, initialize the cursor view with a non-optional cursor, update the cursor in `updateNSView`, and call `resetCursorRects` when the cursor changes. In `Splitter`, use the cursor-rect modifier with the deployment-safe `NSCursor.resizeLeftRight`/`resizeUpDown` cursors on macOS 12 and later; retain the current `NSCursor.push/pop` hover fallback only for Mac Catalyst. Mark the representable overlay as non-hit-testing so it cannot intercept the splitter drag gesture.
+Guard the file with `#if os(macOS)`, use `NSViewRepresentable`, initialize the cursor view with a non-optional cursor, update the cursor in `updateNSView`, and call `resetCursorRects` when the cursor changes. In `Splitter`, resolve `columnResizeCursor`/`rowResizeCursor` through the runtime on macOS 15 and later, falling back to `NSCursor.resizeLeftRight`/`resizeUpDown` on macOS 12 through 14 so the package remains buildable with older SDKs. Retain the current `NSCursor.push/pop` hover fallback only for Mac Catalyst. Mark the representable overlay as non-hit-testing so it cannot intercept the splitter drag gesture.
 
 - [ ] **Step 5: Run focused tests and platform builds.**
 

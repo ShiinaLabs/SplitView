@@ -118,7 +118,7 @@ public struct Splitter: SplitDivider {
 #if os(macOS)
 private extension View {
     func splitViewCursor(horizontal: Bool) -> some View {
-        cursor(horizontal ? NSCursor.resizeLeftRight : NSCursor.resizeUpDown)
+        cursor(SplitterCursor.cursor(horizontal: horizontal))
     }
 }
 #endif

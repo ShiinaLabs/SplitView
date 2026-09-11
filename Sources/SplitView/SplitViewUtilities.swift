@@ -1,6 +1,10 @@
 import SwiftUI
 
 enum SplitFraction {
+    static func activeHolder(stateOwned: FractionHolder, explicit: FractionHolder?) -> FractionHolder {
+        explicit ?? stateOwned
+    }
+
     static func constrained(_ fraction: CGFloat, minPrimary: CGFloat?, minSecondary: CGFloat?) -> CGFloat {
         min(1 - (minSecondary ?? 0), max(minPrimary ?? 0, fraction))
     }
