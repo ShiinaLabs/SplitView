@@ -4,13 +4,13 @@
 
 **Goal:** Improve the fork using the four actionable upstream issue groups already tracked in `ShiinaLabs/SplitView` issues #1–#4, while preserving the package's macOS 12, iOS 15, and Mac Catalyst 15 deployment floors.
 
-**Architecture:** Keep the public Split/HSplit/VSplit APIs unchanged. Extract the orientation-dependent transition edge and fraction clamping decisions into small internal helpers so they can be tested without a UI harness; make default fraction holders stable across SwiftUI view reconstruction while keeping explicitly supplied holders caller-owned; replace deprecated `onChange` overloads with publisher-backed observation; and isolate the AppKit cursor implementation behind a macOS-only file while retaining the existing Catalyst fallback.
+**Architecture:** Keep the public Split/HSplit/VSplit APIs unchanged. Extract the orientation-dependent transition edge and fraction clamping decisions into small internal helpers so they can be tested without a UI harness; make default fraction holders stable across SwiftUI view reconstruction while keeping explicitly supplied holders caller-owned; carry an uninstalled `fractionSeed` through fluent modifiers so no modifier reads a pre-install `@StateObject`; replace deprecated `onChange` overloads with publisher-backed observation; and isolate the AppKit cursor implementation behind a macOS-only file while retaining the existing Catalyst fallback.
 
 **Tech Stack:** Swift 5.8, SwiftUI, XCTest, AppKit only under `#if os(macOS)`, Swift Package Manager, Xcode demo targets.
 
 **Spec:** Fork issues [#1](https://github.com/ShiinaLabs/SplitView/issues/1), [#2](https://github.com/ShiinaLabs/SplitView/issues/2), [#3](https://github.com/ShiinaLabs/SplitView/issues/3), and [#4](https://github.com/ShiinaLabs/SplitView/issues/4), each of which links to its upstream Issue or PR source.
 
-**Status:** Implemented and verified in `codex/fix-upstream-issues`; the follow-up review fixes are included in the open, unmerged fork PR [#5](https://github.com/ShiinaLabs/SplitView/pull/5).
+**Status:** Implemented and verified in `codex/fix-upstream-issues`; the second review follow-up is included in the open, unmerged fork PR [#5](https://github.com/ShiinaLabs/SplitView/pull/5).
 
 ## Global Constraints
 
@@ -116,6 +116,7 @@ git commit -m "fix: stabilize fraction updates and split transitions"
 - Modify: `Sources/SplitView/VSplit.swift:10-43`
 - Modify: `Sources/SplitView/Split.swift:39-130`
 - Modify: `Tests/SplitViewTests/SplitViewUtilitiesTests.swift`
+- Create: `Tests/SplitViewTests/StateObjectLifecycleTests.swift`
 
 **Interfaces:**
 - Keeps the existing `FractionHolder` modifier and initializer signatures.
@@ -127,13 +128,13 @@ Use the existing package and demo build targets as the regression harness: the H
 
 - [ ] **Step 2: Change only default holder storage to `@StateObject` and initialize it from the existing private initializer values.**
 
-Use `_fraction = StateObject(wrappedValue: fraction)` in the private initializers for `Split`, `HSplit`, and `VSplit`. Keep an `explicitFraction` reference separate: default holders are state-owned, while `.fraction(FractionHolder)` continues to observe and update the caller-owned holder. Do not alter public method signatures.
+Use an uninstalled `fractionSeed` to initialize `_fraction = StateObject(wrappedValue: fractionSeed)` in the private initializers for `Split`, `HSplit`, and `VSplit`. Every fluent modifier passes `fractionSeed` without reading the wrapped `fraction`; only `body` reads the installed `fraction` when wiring the child view. Keep an `explicitFraction` reference separate: default holders are state-owned, while `.fraction(FractionHolder)` continues to observe and update the caller-owned holder without seeding any StateObject from it. Do not alter public method signatures.
 
 - [ ] **Step 3: Run focused and full tests.**
 
-Run: `swift test --filter SplitViewUtilitiesTests && swift test`
+Run: `swift test --filter SplitViewUtilitiesTests && swift test --filter StateObjectLifecycleTests && swift test`
 
-Expected: the focused regression and all existing tests pass.
+Expected: the focused regression, mounted View rebuild lifecycle test, and all existing tests pass without an `Accessing StateObject` warning.
 
 - [ ] **Step 4: Commit the holder stability change.**
 

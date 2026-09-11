@@ -51,18 +51,26 @@ final class ObservationTests: XCTestCase {
         )
     }
 
-    func testSplitKeepsDefaultFractionStateOwnedAndExternalFractionSeparate() throws {
+    func testSplitVariantsCarryFractionSeedAndKeepExternalFractionSeparate() throws {
         let packageRoot = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .deletingLastPathComponent()
-        let splitURL = packageRoot.appendingPathComponent("Sources/SplitView/Split.swift")
-        let source = try String(contentsOf: splitURL, encoding: .utf8)
+        for fileName in ["Split.swift", "HSplit.swift", "VSplit.swift"] {
+            let splitURL = packageRoot.appendingPathComponent("Sources/SplitView/\(fileName)")
+            let source = try String(contentsOf: splitURL, encoding: .utf8)
 
-        XCTAssertTrue(source.contains("@StateObject private var fraction: FractionHolder"))
-        XCTAssertTrue(source.contains("private let explicitFraction: FractionHolder?"))
-        XCTAssertTrue(source.contains("SplitFraction.activeHolder"))
-        XCTAssertFalse(source.contains("@ObservedObject private var fraction: FractionHolder"))
+            XCTAssertTrue(source.contains("@StateObject private var fraction: FractionHolder"), fileName)
+            XCTAssertTrue(source.contains("private let fractionSeed: FractionHolder"), fileName)
+            XCTAssertTrue(source.contains("private let explicitFraction: FractionHolder?"), fileName)
+            if fileName == "Split.swift" {
+                XCTAssertTrue(source.contains("SplitFraction.activeHolder"), fileName)
+            }
+            XCTAssertFalse(source.contains("@ObservedObject private var fraction: FractionHolder"), fileName)
+
+            let fluentModifierRegion = source.components(separatedBy: "//MARK: Modifiers").last ?? source
+            XCTAssertFalse(fluentModifierRegion.contains("fraction: fraction,"), fileName)
+        }
     }
 
     func testSplitDoesNotForceHideShowAnimation() throws {
