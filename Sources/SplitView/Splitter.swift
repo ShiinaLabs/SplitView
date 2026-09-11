@@ -12,6 +12,9 @@ public protocol SplitDivider: View {
 }
 
 import SwiftUI
+#if os(macOS)
+import AppKit
+#endif
 
 /// The Splitter that separates the `primary` from `secondary` views in a `Split` view.
 ///
@@ -68,17 +71,19 @@ public struct Splitter: SplitDivider {
         // hidden when the side is hidden (styling.hideSplitter is true), then set the
         // splitter color to clear. When the splitter is actually hidden, it doesn't even
         // exist, but when previewing it does, so we have to make it invisible this way.
-        .onChange(of: styling.previewHide) { hide in
+        .onReceive(styling.$previewHide) { hide in
             if hide {
                 dividerColor = styling.hideSplitter ? .clear : privateColor ?? color
             } else {
                 dividerColor = privateColor ?? color
             }
         }
+        #if os(macOS)
+        .splitViewCursor(horizontal: layout.isHorizontal)
+        #elseif targetEnvironment(macCatalyst)
         // Perhaps should consider some kind of custom hoverEffect, since the cursor change
         // on hover doesn't work on iOS.
         .onHover { inside in
-            #if targetEnvironment(macCatalyst) || os(macOS)
             // With nested split views, it's possible to transition from one Splitter to another,
             // so we always need to pop the current cursor (a no-op when it's the only one). We
             // may or may not push the hover cursor depending on whether it's inside or not.
@@ -86,8 +91,8 @@ public struct Splitter: SplitDivider {
             if inside {
                 layout.isHorizontal ? NSCursor.resizeLeftRight.push() : NSCursor.resizeUpDown.push()
             }
-            #endif
         }
+        #endif
     }
     
     public init(color: Color? = nil, inset: CGFloat? = nil, visibleThickness: CGFloat? = nil, invisibleThickness: CGFloat? = nil) {
@@ -109,6 +114,14 @@ public struct Splitter: SplitDivider {
     }
     
 }
+
+#if os(macOS)
+private extension View {
+    func splitViewCursor(horizontal: Bool) -> some View {
+        cursor(SplitterCursor.cursor(horizontal: horizontal))
+    }
+}
+#endif
 
 struct Splitter_Previews: PreviewProvider {
     static var previews: some View {

@@ -39,7 +39,12 @@ public struct Split<P: View, D: SplitDivider, S: View>: View {
     @ObservedObject private var layout: LayoutHolder
     /// Only affects the initial layout, but updated to `constrainedFraction` after dragging ends.
     /// In this way, Split users can save the `FractionHolder` state to reflect slider position for restarts.
-    @ObservedObject private var fraction: FractionHolder
+    @StateObject private var fraction: FractionHolder
+    /// The uninstalled holder used to seed `fraction` and carry configuration through fluent modifiers.
+    private let fractionSeed: FractionHolder
+    /// A caller-owned holder, when supplied through the `fraction(_:)` modifier.
+    /// When nil, `fraction` is owned by this view's identity via `@StateObject`.
+    private let explicitFraction: FractionHolder?
     /// Use to hide/show `secondary` independent of dragging. When value is `false`, will restore to `constrainedFraction`.
     @ObservedObject private var hide: SideHolder
     /// Fraction that tracks the `splitter` position across full width/height, where minPFraction <= constrainedFraction <= (1-minSFraction)
@@ -50,6 +55,10 @@ public struct Split<P: View, D: SplitDivider, S: View>: View {
     @State private var oldSize: CGSize?
     /// The previous position as we drag the `splitter`
     @State private var previousPosition: CGFloat?
+
+    private var activeFraction: FractionHolder {
+        SplitFraction.activeHolder(stateOwned: fraction, explicit: explicitFraction)
+    }
     
     public var body: some View {
         GeometryReader { geometry in
@@ -72,21 +81,25 @@ public struct Split<P: View, D: SplitDivider, S: View>: View {
             let sHeight = horizontal ? breadth : max(minSLength, min(height - pLength, sLength - spacing / 2))
             let sOffset = horizontal ? CGSize(width: pWidth + spacing, height: 0) : CGSize(width: 0, height: pHeight + spacing)
             let dCenter = horizontal ? CGPoint(x: pWidth + spacing / 2, y: height / 2) : CGPoint(x: width / 2, y: pHeight + spacing / 2)
+            let splitterSide = SplitTransition.splitterSide(current: hide.side, previous: hide.oldSide)
             ZStack(alignment: .topLeading) {
                 if !hidePrimary {
                     primary
                         .frame(width: pWidth, height: pHeight)
+                        .transition(.move(edge: SplitTransition.edge(for: .primary, layout: layout.value)))
                 }
                 if !hideSecondary {
                     secondary
                         .frame(width: sWidth, height: sHeight)
                         .offset(sOffset)
+                        .transition(.move(edge: SplitTransition.edge(for: .secondary, layout: layout.value)))
                 }
                 // Only show the splitter if it is draggable. See isDraggable comments.
                 if isDraggable() {
                     splitter
                         .position(dCenter)
                         .simultaneousGesture(drag(in: size))
+                        .transition(.move(edge: SplitTransition.edge(for: splitterSide, layout: layout.value)))
                 }
             }
             // Our size changes when the window size changes or the containing window's size changes.
@@ -99,7 +112,13 @@ public struct Split<P: View, D: SplitDivider, S: View>: View {
             }
             .clipped()  // Can cause problems in some List styles if not clipped
             .environmentObject(layout)
-            .onChange(of: fraction.value) { new in constrainedFraction = new }
+            .onReceive(activeFraction.$value) { new in
+                if let newFraction = SplitFraction.externallyUpdated(new, current: constrainedFraction, minPrimary: minPFraction, minSecondary: minSFraction) {
+                    withAnimation {
+                        constrainedFraction = newFraction
+                    }
+                }
+            }
         }
     }
 
@@ -111,21 +130,24 @@ public struct Split<P: View, D: SplitDivider, S: View>: View {
         let fraction = FractionHolder()
         let hide = SideHolder()
         let constraints = SplitConstraints()
-        self.init(layout, fraction: fraction, hide: hide, constraints: constraints, onDrag: nil, primary: { primary() }, splitter: { D() }, secondary: { secondary() })
+        self.init(layout, fractionSeed: fraction, explicitFraction: nil, hide: hide, constraints: constraints, onDrag: nil, primary: { primary() }, splitter: { D() }, secondary: { secondary() })
     }
     
     /// Private init requires all values for Split state to be specified and is used by the modifiers.
-    private init(_ layout: LayoutHolder, fraction: FractionHolder, hide: SideHolder, constraints: SplitConstraints, onDrag: ((CGFloat)->Void)?, @ViewBuilder primary: @escaping ()->P, @ViewBuilder splitter: @escaping ()->D, @ViewBuilder secondary: @escaping ()->S) {
+    private init(_ layout: LayoutHolder, fractionSeed: FractionHolder, explicitFraction: FractionHolder?, hide: SideHolder, constraints: SplitConstraints, onDrag: ((CGFloat)->Void)?, @ViewBuilder primary: @escaping ()->P, @ViewBuilder splitter: @escaping ()->D, @ViewBuilder secondary: @escaping ()->S) {
         self.layout = layout
-        self.fraction = fraction
+        _fraction = StateObject(wrappedValue: fractionSeed)
+        self.fractionSeed = fractionSeed
+        self.explicitFraction = explicitFraction
         self.hide = hide
         self.constraints = constraints
         self.onDrag = onDrag
         self.primary = primary()
         self.splitter = splitter()
         self.secondary = secondary()
-        _constrainedFraction = State(initialValue: fraction.value)  // Local fraction updated during drag
-        _fullFraction = State(initialValue: fraction.value)         // Local fraction updated during drag
+        let initialFraction = explicitFraction?.value ?? fractionSeed.value
+        _constrainedFraction = State(initialValue: initialFraction)  // Local fraction updated during drag
+        _fullFraction = State(initialValue: initialFraction)         // Local fraction updated during drag
         // Constants we use a lot and want to simplify access and avoid recomputing
         minPFraction = constraints.minPFraction
         minSFraction = constraints.minSFraction
@@ -168,8 +190,8 @@ public struct Split<P: View, D: SplitDivider, S: View>: View {
         let newPLength = side.isPrimary ? oldPLength : oldPLength + delta
         let newFraction = newPLength / newLength
         // Always keep the constrainedFraction within bounds of minimums if specified
-        constrainedFraction = min(1 - (minSFraction ?? 0), max((minPFraction ?? 0), newFraction))
-        fraction.value = constrainedFraction
+        constrainedFraction = SplitFraction.constrained(newFraction, minPrimary: minPFraction, minSecondary: minSFraction)
+        activeFraction.value = constrainedFraction
     }
     
     /// The Gesture recognized by the `splitter`.
@@ -210,7 +232,7 @@ public struct Split<P: View, D: SplitDivider, S: View>: View {
                 // The fullFraction is used to determine the sideToHide, so we need to reset when done dragging,
                 // but *after* setting the hide.side.
                 fullFraction = constrainedFraction
-                fraction.value = constrainedFraction
+                activeFraction.value = constrainedFraction
             }
     }
     
@@ -247,7 +269,7 @@ public struct Split<P: View, D: SplitDivider, S: View>: View {
         let delta = previousPosition == nil ? gestureTranslation : gestureLocation - previousPosition!  // Amount moved since last change
         let constrainedLocation = max(0, min(length, splitterLocation + delta))                         // New location kept in proper bounds
         let fullFraction = constrainedLocation / length                                                 // Fraction of full size without regard to constraints
-        let constrainedFraction = min(1 - (minSFraction ?? 0), max((minPFraction ?? 0), fullFraction))  // Fraction of full size kept within constraints
+        let constrainedFraction = SplitFraction.constrained(fullFraction, minPrimary: minPFraction, minSecondary: minSFraction)  // Fraction of full size kept within constraints
         return (constrained: constrainedFraction, full: fullFraction)
     }
     
@@ -326,13 +348,13 @@ public struct Split<P: View, D: SplitDivider, S: View>: View {
     
     /// Return a new Split with the `splitter` set to the `splitter` passed-in.
     public func splitter<T>(@ViewBuilder _ splitter: @escaping ()->T) -> Split<P, T, S> where T: View {
-        return Split<P, T, S>(layout, fraction: fraction, hide: hide, constraints: constraints, onDrag: onDrag, primary: { primary }, splitter: splitter, secondary: { secondary })
+        return Split<P, T, S>(layout, fractionSeed: fractionSeed, explicitFraction: explicitFraction, hide: hide, constraints: constraints, onDrag: onDrag, primary: { primary }, splitter: splitter, secondary: { secondary })
     }
     
     /// Return a new instance of Split with `constraints` set to a SplitConstraints holding these values.
     public func constraints(minPFraction: CGFloat? = nil, minSFraction: CGFloat? = nil, priority: SplitSide? = nil, dragToHideP: Bool = false, dragToHideS: Bool = false) -> Split {
         let constraints = SplitConstraints(minPFraction: minPFraction, minSFraction: minSFraction, priority: priority, dragToHideP: dragToHideP, dragToHideS: dragToHideS)
-        return Split(layout, fraction: fraction, hide: hide, constraints: constraints, onDrag: onDrag, primary: { primary }, splitter: { splitter }, secondary: { secondary })
+        return Split(layout, fractionSeed: fractionSeed, explicitFraction: explicitFraction, hide: hide, constraints: constraints, onDrag: onDrag, primary: { primary }, splitter: { splitter }, secondary: { secondary })
     }
     
     /// Return a new instance of Split with `constraints` set to this SplitConstraints.
@@ -349,7 +371,7 @@ public struct Split<P: View, D: SplitDivider, S: View>: View {
     ///
     /// This is a convenience method for HSplit and VSplit.
     public func onDrag(_ callback: ((CGFloat)->Void)?) -> Split {
-        return Split(layout, fraction: fraction, hide: hide, constraints: constraints, onDrag: callback, primary: { primary }, splitter: { splitter }, secondary: { secondary })
+        return Split(layout, fractionSeed: fractionSeed, explicitFraction: explicitFraction, hide: hide, constraints: constraints, onDrag: callback, primary: { primary }, splitter: { splitter }, secondary: { secondary })
     }
     
     /// Return a new instance of Split with its `splitter.styling` set to these values.
@@ -358,7 +380,7 @@ public struct Split<P: View, D: SplitDivider, S: View>: View {
     public func styling(color: Color? = nil, inset: CGFloat? = nil, visibleThickness: CGFloat? = nil, invisibleThickness: CGFloat? = nil, hideSplitter: Bool = false) -> Split {
         let styling = SplitStyling(color: color, inset: inset, visibleThickness: visibleThickness, invisibleThickness: invisibleThickness, hideSplitter: hideSplitter)
         splitter.styling.reset(from: styling)
-        return Split(layout, fraction: fraction, hide: hide, constraints: constraints, onDrag: onDrag, primary: { primary }, splitter: { splitter }, secondary: { secondary })
+        return Split(layout, fractionSeed: fractionSeed, explicitFraction: explicitFraction, hide: hide, constraints: constraints, onDrag: onDrag, primary: { primary }, splitter: { splitter }, secondary: { secondary })
     }
     
     /// Return a new instance of Split with its `splitter.styling` set to the values of this `styling`.
@@ -373,22 +395,22 @@ public struct Split<P: View, D: SplitDivider, S: View>: View {
     /// Split only supports `layout` specified using a LayoutHolder because if you are not going
     /// to change the `layout`, then you should just use HSplit or VSplit.
     public func layout(_ layout: LayoutHolder) -> Split {
-        Split(layout, fraction: fraction, hide: hide, constraints: constraints, onDrag: onDrag, primary: { primary }, splitter: { splitter }, secondary: { secondary })
+        Split(layout, fractionSeed: fractionSeed, explicitFraction: explicitFraction, hide: hide, constraints: constraints, onDrag: onDrag, primary: { primary }, splitter: { splitter }, secondary: { secondary })
     }
     
     /// Return a new instance of Split with `fraction` set to this FractionHolder.
     public func fraction(_ fraction: FractionHolder) -> Split {
-        Split(layout, fraction: fraction, hide: hide, constraints: constraints, onDrag: onDrag, primary: { primary }, splitter: { splitter }, secondary: { secondary })
+        Split(layout, fractionSeed: fractionSeed, explicitFraction: fraction, hide: hide, constraints: constraints, onDrag: onDrag, primary: { primary }, splitter: { splitter }, secondary: { secondary })
     }
     
     /// Return a new instance of Split with `fraction` set to a FractionHolder holding onto this CGFloat.
     public func fraction(_ fraction: CGFloat) -> Split {
-        self.fraction(FractionHolder(fraction))
+        Split(layout, fractionSeed: FractionHolder(fraction), explicitFraction: nil, hide: hide, constraints: constraints, onDrag: onDrag, primary: { primary }, splitter: { splitter }, secondary: { secondary })
     }
     
     /// Return a new instance of Split with `hide` set to this SideHolder.
     public func hide(_ side: SideHolder) -> Split {
-        Split(layout, fraction: fraction, hide: side, constraints: constraints, onDrag: onDrag, primary: { primary }, splitter: { splitter }, secondary: { secondary })
+        Split(layout, fractionSeed: fractionSeed, explicitFraction: explicitFraction, hide: side, constraints: constraints, onDrag: onDrag, primary: { primary }, splitter: { splitter }, secondary: { secondary })
     }
     
     /// Return a new instance of Split with `hide` set to a SideHolder holding onto this SplitSide.
